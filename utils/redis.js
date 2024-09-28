@@ -8,13 +8,15 @@ class RedisClient {
       console.error(`Error connecting to Redis: ${err}`);
     });
 
-    this.client.on('connect', () => {
+    this.client.connect().then(() => {
       console.log('Connected to Redis');
+    }).catch((err) => {
+      console.error(`Error connecting to Redis: ${err}`);
     });
   }
 
   isAlive() {
-    return this.client.isOpen();
+    return this.client.isOpen;
   }
 
   async get(key) {
@@ -29,7 +31,8 @@ class RedisClient {
 
   async set(key, value, duration) {
     try {
-      await this.client.set(key, value, {
+      const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+      await this.client.set(key, stringValue, {
         EX: duration,
       });
     } catch (err) {
