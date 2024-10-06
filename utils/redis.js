@@ -8,11 +8,9 @@ class RedisClient {
       console.error(`Error connecting to Redis: ${err}`);
     });
 
-    this.client.connect().then(() => {
-      console.log('Connected to Redis');
-    }).catch((err) => {
-      console.error(`Error connecting to Redis: ${err}`);
-    });
+    this.client.connect().catch((err) => {
+      console.error('Failed to connect to redis:', err)
+    })
   }
 
   isAlive() {
