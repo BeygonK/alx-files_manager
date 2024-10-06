@@ -1,9 +1,7 @@
 import express from 'express';
-import { configDotenv } from 'dotenv';
-import routes from './routes/index.js';
+import routes from './routes/index';
 
-// Load environment variables
-configDotenv();
+// Load environmet variables
 
 const app = express();
 const port = process.env.PORT || 5000;
