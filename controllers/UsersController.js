@@ -1,5 +1,7 @@
 import crypto from 'crypto';
+import { ObjectId } from 'mongodb';
 import dbClient from '../utils/db';
+import redisClient from '../utils/redis';
 
 class UsersController {
   // POST /users
@@ -37,6 +39,40 @@ class UsersController {
     } catch (err) {
       console.error(`Error: ${err.message}`);
       return res.status(500).json({ error: 'Failed to create user' });
+    }
+  }
+
+  static async getMe(req, res) {
+    const token = req.headers['x-token'];
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const redisKey = `auth_${token}`;
+
+    try {
+      // Retrieve user ID from Redis
+      const userId = await redisClient.get(redisKey);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      console.log(`Getting userid ${userId}`);
+      // Find the user by ID
+
+      const user = await dbClient.db.collection('users').findOne({ _id: ObjectId(userId) });
+
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Return user information (email and id only)
+      return res.status(200).json({ email: user.email, id: user._id });
+    } catch (error) {
+      console.error('Error retrieving user information:', error);
+      return res.status(500).json({ error: 'Internal Server Error' });
     }
   }
 }
