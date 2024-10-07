@@ -27,4 +27,16 @@ router.get('/users/me', UsersController.getMe);
 // POST /files
 router.post('/files', FilesController.postUpload);
 
+// GET file by id:
+router.get('/files/:id', FilesController.getShow);
+
+// GET index
+router.get('/files', FilesController.getIndex);
+
+// PUT publish
+router.put('/files/:id/publish', FilesController.putPublish);
+
+// PUT unpublish
+router.put('/files/:id/unpublish', FilesController.putUnpublish);
+
 export default router;
