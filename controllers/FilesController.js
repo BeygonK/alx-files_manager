@@ -1,10 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ObjectId } from 'mongodb';
+import Queue from 'bull/lib/queue';
 import fs from 'fs';
 import path from 'path';
 import mime from 'mime-types';
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
+
+const fileQueue = new Queue('fileQueue');
 
 // Helperfunction to get user
 async function getUserFromToken(req) {
@@ -88,6 +91,14 @@ class FilesController {
     // Complete the file document and insert it into the DB
     fileDoc.localPath = localPath;
     const result = await dbClient.db.collection('files').insertOne(fileDoc);
+
+    // image queue
+    if (type === 'image') {
+      fileQueue.add({
+        userId: userId.toString(),
+        fileId: result.ops[0]._id.toString(),
+      });
+    }
 
     return res.status(201).json(result.ops[0]);
   }
@@ -198,12 +209,15 @@ class FilesController {
   }
 
   // eslint-disable-next-line consistent-return
+
+  // eslint-disable-next-line consistent-return
   static async getFile(req, res) {
     const fileId = req.params.id;
+    const { size } = req.query;
     const user = await getUserFromToken(req);
 
     try {
-      // Find the file by ID
+    // Find the file by ID
       const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(fileId) });
 
       if (!file) {
@@ -220,8 +234,25 @@ class FilesController {
         return res.status(404).json({ error: 'Not found' });
       }
 
+      // Determine which file path to use based on the `size` query parameter
+      let filePath = file.localPath;
+      if (file.type === 'image' && size) {
+        const allowedSizes = [100, 250, 500];
+        if (!allowedSizes.includes(parseInt(size, 10))) {
+          return res.status(400).json({ error: `Invalid size. Allowed sizes are ${allowedSizes.join(', ')}` });
+        }
+
+        // Check if the resized file exists (e.g., image_100, image_250, etc.)
+        const thumbnailPath = `${file.localPath}_${size}`;
+        if (fs.existsSync(thumbnailPath)) {
+          filePath = thumbnailPath;
+        } else {
+          return res.status(404).json({ error: 'Not found' });
+        }
+      }
+
       // Check if the file exists on the local path
-      if (!fs.existsSync(file.localPath)) {
+      if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: 'Not found' });
       }
 
@@ -230,7 +261,7 @@ class FilesController {
       res.setHeader('Content-Type', mimeType || 'application/octet-stream');
 
       // Stream the file content to the response
-      const fileStream = fs.createReadStream(file.localPath);
+      const fileStream = fs.createReadStream(filePath);
       fileStream.pipe(res);
     } catch (error) {
       return res.status(500).json({ error: 'Internal server error' });
