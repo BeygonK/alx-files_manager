@@ -211,62 +211,78 @@ class FilesController {
   // eslint-disable-next-line consistent-return
 
   // eslint-disable-next-line consistent-return
-  static async getFile(req, res) {
+
+static async getFile(req, res) {
     const fileId = req.params.id;
     const { size } = req.query;
     const user = await getUserFromToken(req);
 
     try {
-    // Find the file by ID
-      const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(fileId) });
+        // Find the file by ID
+        const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(fileId) });
 
-      if (!file) {
-        return res.status(404).json({ error: 'Not found' });
-      }
-
-      // If the file is a folder, return an error
-      if (file.type === 'folder') {
-        return res.status(400).json({ error: "A folder doesn't have content" });
-      }
-
-      // If the file is private, check if the user is authenticated and is the owner
-      if (!file.isPublic && (!user || String(file.userId) !== String(user._id))) {
-        return res.status(404).json({ error: 'Not found' });
-      }
-
-      // Determine which file path to use based on the `size` query parameter
-      let filePath = file.localPath;
-      if (file.type === 'image' && size) {
-        const allowedSizes = [100, 250, 500];
-        if (!allowedSizes.includes(parseInt(size, 10))) {
-          return res.status(400).json({ error: `Invalid size. Allowed sizes are ${allowedSizes.join(', ')}` });
+        if (!file) {
+            return res.status(404).json({ error: 'Not found' });
         }
 
-        // Check if the resized file exists (e.g., image_100, image_250, etc.)
-        const thumbnailPath = `${file.localPath}_${size}`;
-        if (fs.existsSync(thumbnailPath)) {
-          filePath = thumbnailPath;
-        } else {
-          return res.status(404).json({ error: 'Not found' });
+        // If the file is a folder, return an error
+        if (file.type === 'folder') {
+            return res.status(400).json({ error: "A folder doesn't have content" });
         }
-      }
 
-      // Check if the file exists on the local path
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: 'Not found' });
-      }
+        // If the file is private, check if the user is authenticated and is the owner
+        if (!file.isPublic && (!user || String(file.userId) !== String(user._id))) {
+            return res.status(404).json({ error: 'Not found' });
+        }
 
-      // Get the MIME type based on the file name
-      const mimeType = mime.lookup(file.name);
-      res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+        // Determine which file path to use based on the `size` query parameter
+        let filePath = file.localPath;
+        if (file.type === 'image' && size) {
+            const allowedSizes = [100, 250, 500];
+            if (!allowedSizes.includes(parseInt(size, 10))) {
+                return res.status(400).json({ error: `Invalid size. Allowed sizes are ${allowedSizes.join(', ')}` });
+            }
 
-      // Stream the file content to the response
-      const fileStream = fs.createReadStream(filePath);
-      fileStream.pipe(res);
+            // Check if the resized file exists (e.g., image_100, image_250, etc.)
+            const thumbnailPath = `_${size}.png`; // Make sure to append the correct file extension
+            const thumbnailOptions = {
+              width: parseInt(size, 10),   // Set width to the requested size (100, 250, 500)
+              height: parseInt(size, 10),  // Set height to match the width for a square image
+              responseType: 'buffer',      // Ensure we receive the image as a buffer
+              fit: 'cover'                 // Crop the image to make it square (aspect ratio 1:1)
+          };
+            if (fs.existsSync(thumbnailPath)) {
+                filePath = thumbnailPath;
+            } else {
+                // If thumbnail does not exist, generate it
+                try {
+                    const imageBuffer = fs.readFileSync(file.localPath);
+                    const thumbnail = await imageThumbnail(imageBuffer, thumbnailOptions);
+                    fs.writeFileSync(thumbnailPath, thumbnail); // Save the thumbnail
+                    filePath = thumbnailPath; // Use the newly created thumbnail path
+                } catch (error) {
+                    return res.status(500).json({ error: `Error generating thumbnail: ${error.message}` });
+                }
+            }
+        }
+
+        // Check if the file exists on the local path
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Not found' });
+        }
+
+        // Get the MIME type based on the file name
+        const mimeType = mime.lookup(file.name);
+        res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+
+        // Stream the file content to the response
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
     } catch (error) {
-      return res.status(500).json({ error: 'Internal server error' });
+        return res.status(500).json({ error: 'Internal server error' });
     }
-  }
+}
+
 }
 
 export default FilesController;

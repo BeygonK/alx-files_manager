@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { ObjectId } from 'mongodb';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
-
+import { userQueue } from '../utils/userQueues';
 class UsersController {
   // POST /users
   static async postNew(req, res) {
@@ -34,6 +34,10 @@ class UsersController {
 
       const newUser = { email, password: hashedPassword };
       const result = await usersCollection.insertOne(newUser);
+
+      userQueue.add({
+        userId: result.insertedId,
+      });
 
       return res.status(201).json({ id: result.insertedId, email });
     } catch (err) {

@@ -40,6 +40,6 @@ router.put('/files/:id/publish', FilesController.putPublish);
 router.put('/files/:id/unpublish', FilesController.putUnpublish);
 
 // GET data
-router.put('/files/:id/data', FilesController.getFile);
+router.get('/files/:id/data', FilesController.getFile);
 
 export default router;
